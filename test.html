@@ -1,0 +1,45 @@
+<html>
+<head>
+<link rel="stylesheet" href="scripts/jquery-ui.css" />
+<!-- <link rel="stylesheet" href="scripts/style.css" /> -->
+<script type="text/javascript" src="scripts/jquery.js"></script>
+<script type="text/javascript" src="scripts/jquery-ui.js"></script>
+<script type="text/javascript" src="scripts/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="scripts/webgl-utils.js"></script>
+<script type="text/javascript" src="scripts/main.js"></script>
+<script type="text/javascript">
+var url = "eelab1_4cm.pcd?callback=parsePCD";
+// $.ajax({
+// url: url,
+// dataType: "jsonp",
+// complete: function(file)
+//     {
+// // 	var data = parsePCD(file);
+// 	alert(String(file));
+// // 	document.write(JSON.stringify(data));
+// // 	points = data.points;
+// // 	vertices = data.vertices;
+// // 	colors = data.colors;
+// // 	initCanvas();
+//     }
+// // timeout: 10000,
+// //     async: false,
+// // error: function(jqXHR, textStatus)
+// // 	{
+// // 	    alert(textStatus);
+// // 	}
+// }).done(
+//     function(file)
+//     {
+// // 	var data = parsePCD(file);
+// // 	document.write(JSON.stringify(data));
+// // 	points = data.points;
+// // 	vertices = data.vertices;
+// // 	colors = data.colors;
+// // 	initCanvas();
+//     }
+// );
+</script>
+<script type="text/javascript" src="eelab1_4cm.pcd?callback=parsePCD"></script>
+</head>
+</html>

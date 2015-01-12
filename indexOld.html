@@ -1,0 +1,521 @@
+<html>
+
+<head>
+<title>PCD XYZRGB Cloud Viewer</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="cloud1.js"></script>
+<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+<link rel="stylesheet" href="jquery-ui.css" />
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="jquery-ui.js"></script>
+
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec4 vColor;
+
+    void main(void) {
+        gl_FragColor = vColor;
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec4 aVertexColor;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    uniform float uPointSize;
+
+    varying vec4 vColor;
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+	gl_PointSize = uPointSize;
+        vColor = aVertexColor;
+    }
+</script>
+
+
+<script type="text/javascript">
+
+    var gl;
+    var lineWidth = 5.0;
+    var length = 1.0;
+    var pointSize = 3, maxPointSize = 7, minPointSize = 1;
+    var xoffset = 0.0, yoffset = 0.0, zoffset = -5.0;
+    var rotateStep = 5, shiftStep = 0;
+    var coordsLen = 5.0;
+    var rotateScale = 10, shiftScale = 70;
+    var mouseDown = false;
+    var lastMouseX, lastMouseY;
+    var rotationMatrix = mat4.create();
+    mat4.identity(rotationMatrix);
+
+    function initGL(canvas) {
+        try {
+            gl = canvas.getContext("experimental-webgl");
+            gl.viewportWidth = canvas.width;
+            gl.viewportHeight = canvas.height;
+        } catch (e) {
+        }
+        if (!gl) {
+            alert("Could not initialise WebGL, sorry :-(");
+        }
+    }
+
+
+    function getShader(gl, id) {
+        var shaderScript = document.getElementById(id);
+        if (!shaderScript) {
+            return null;
+        }
+
+        var str = "";
+        var k = shaderScript.firstChild;
+        while (k) {
+            if (k.nodeType == 3) {
+                str += k.textContent;
+            }
+            k = k.nextSibling;
+        }
+
+        var shader;
+        if (shaderScript.type == "x-shader/x-fragment") {
+            shader = gl.createShader(gl.FRAGMENT_SHADER);
+        } else if (shaderScript.type == "x-shader/x-vertex") {
+            shader = gl.createShader(gl.VERTEX_SHADER);
+        } else {
+            return null;
+        }
+
+        gl.shaderSource(shader, str);
+        gl.compileShader(shader);
+
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            alert(gl.getShaderInfoLog(shader));
+            return null;
+        }
+
+        return shader;
+    }
+
+
+    var shaderProgram;
+
+    function initShaders() {
+        var fragmentShader = getShader(gl, "shader-fs");
+        var vertexShader = getShader(gl, "shader-vs");
+
+        shaderProgram = gl.createProgram();
+        gl.attachShader(shaderProgram, vertexShader);
+        gl.attachShader(shaderProgram, fragmentShader);
+        gl.linkProgram(shaderProgram);
+
+        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+            alert("Could not initialise shaders");
+        }
+
+        gl.useProgram(shaderProgram);
+
+        shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
+        gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
+
+        shaderProgram.vertexColorAttribute = gl.getAttribLocation(shaderProgram, "aVertexColor");
+        gl.enableVertexAttribArray(shaderProgram.vertexColorAttribute);
+
+        shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
+        shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
+	shaderProgram.pointSizeUniform = gl.getUniformLocation(shaderProgram, "uPointSize");
+    }
+
+
+    var mvMatrix = mat4.create();
+    var mvMatrixStack = [];
+    var pMatrix = mat4.create();
+
+    function mvPushMatrix() {
+        var copy = mat4.create();
+        mat4.set(mvMatrix, copy);
+        mvMatrixStack.push(copy);
+    }
+
+    function mvPopMatrix() {
+        if (mvMatrixStack.length == 0) {
+            throw "Invalid popMatrix!";
+        }
+        mvMatrix = mvMatrixStack.pop();
+    }
+
+
+    function setMatrixUniforms() {
+        gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
+        gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+	gl.uniform1f(shaderProgram.pointSizeUniform, pointSize);
+    }
+
+
+    function degToRad(degrees) {
+        return degrees * Math.PI / 180;
+    }
+
+
+    var triangleVertexPositionBuffer;
+    var triangleVertexColorBuffer;
+    var coordinateSystemVerticesBuffer;
+    var coordinateSystemColorBuffer;
+
+    function initBuffers() {
+        triangleVertexPositionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+        triangleVertexPositionBuffer.itemSize = 3;
+        triangleVertexPositionBuffer.numItems = points;
+
+        triangleVertexColorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+        triangleVertexColorBuffer.itemSize = 4;
+        triangleVertexColorBuffer.numItems = points;
+
+	var coordinateSystemVertices = [0.0, 0.0, 0.0,
+					length, 0.0, 0.0,
+					0.0, 0.0, 0.0,
+					0.0, length, 0.0,
+					0.0, 0.0, 0.0,
+					0.0, 0.0, length];
+
+	var coordinateSystemColors = [1.0, 0.0, 0.0, 1.0,
+				      1.0, 0.0, 0.0, 1.0,
+				      0.0, 1.0, 0.0, 1.0,
+				      0.0, 1.0, 0.0, 1.0,
+				      0.0, 0.0, 1.0, 1.0,
+				      0.0, 0.0, 1.0, 1.0];
+
+	coordinateSystemVerticesBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, coordinateSystemVerticesBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(coordinateSystemVertices), gl.STATIC_DRAW);
+        coordinateSystemVerticesBuffer.itemSize = 3;
+        coordinateSystemVerticesBuffer.numItems = 6;
+
+        coordinateSystemColorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, coordinateSystemColorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(coordinateSystemColors), gl.STATIC_DRAW);
+        coordinateSystemColorBuffer.itemSize = 4;
+        coordinateSystemColorBuffer.numItems = 6;
+    }
+
+    function drawCoordinateSystem() {
+	gl.bindBuffer(gl.ARRAY_BUFFER, coordinateSystemVerticesBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, coordinateSystemVerticesBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, coordinateSystemColorBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, coordinateSystemColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        setMatrixUniforms();
+	gl.lineWidth(lineWidth);
+        gl.drawArrays(gl.LINES, 0, coordinateSystemVerticesBuffer.numItems);
+    }
+
+    function drawScene() {
+        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	
+	gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexColorBuffer);
+        gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, triangleVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+        setMatrixUniforms();
+        gl.drawArrays(gl.POINTS, 0, triangleVertexPositionBuffer.numItems);
+	
+	if(mouseDown==true)
+	{
+	  drawCoordinateSystem();
+	}
+    }
+
+    function initializeScene() {
+	mat4.perspective(60, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+        mat4.identity(mvMatrix);
+        mat4.translate(mvMatrix, [xoffset, yoffset, zoffset]);
+        drawScene();
+    }
+
+    function handleMouseDown(event) {
+        mouseDown = true;
+        lastMouseX = event.clientX;
+        lastMouseY = event.clientY;
+    }
+
+
+    function handleMouseUp(event) {
+        mouseDown = false;
+	drawScene();
+    }
+
+
+    function handleMouseMove(event) {
+        if (!mouseDown) {
+            return;
+        }
+        var newX = event.clientX;
+        var newY = event.clientY;
+
+        var deltaX = newX - lastMouseX
+        var deltaY = newY - lastMouseY;
+	
+	var newRotationMatrix = mat4.create();
+	mat4.identity(newRotationMatrix);
+	
+	if(currentlyPressedKeys[17])
+	{
+	    mat4.rotate(newRotationMatrix, degToRad(deltaY / rotateScale), [0, 0, -1]);
+	    mat4.multiply(newRotationMatrix, rotationMatrix, rotationMatrix);
+	}
+	else if(currentlyPressedKeys[16])
+	{
+	    xoffset+=deltaX/shiftScale;
+	    yoffset-=deltaY/shiftScale;
+	}
+	else
+	{
+	    mat4.rotate(newRotationMatrix, degToRad(deltaX / rotateScale), [0, 1, 0]);
+	    mat4.rotate(newRotationMatrix, degToRad(deltaY / rotateScale), [1, 0, 0]);
+	    mat4.multiply(newRotationMatrix, rotationMatrix, rotationMatrix);
+	}
+
+	mat4.identity(mvMatrix);
+	mat4.translate(mvMatrix, [xoffset, yoffset, zoffset]);
+	mat4.multiply(mvMatrix, rotationMatrix);
+
+        lastMouseX = newX
+        lastMouseY = newY;
+	drawScene();
+    }
+
+    function rotate(axisX, axisY, axisZ, angle)
+    {
+	var tempMat = mat4.create();
+	mat4.identity(tempMat);
+	mat4.rotate(tempMat, degToRad(angle), [axisX, axisY, axisZ]);
+	mat4.multiply(tempMat, rotationMatrix, rotationMatrix); 
+	mat4.identity(mvMatrix);
+	mat4.translate(mvMatrix, [xoffset, yoffset, zoffset]);
+	mat4.multiply(mvMatrix, rotationMatrix);
+	drawScene();
+    }
+
+    function rotateX()
+    {
+	rotateStep = document.getElementById("rotateStep").value;
+	if(rotateStep=="")
+	{
+	  return;
+	}
+	rotate(1,0,0,rotateStep);
+    }
+
+    function rotateY()
+    {
+	rotateStep = document.getElementById("rotateStep").value;
+	if(rotateStep=="")
+	{
+	  return;
+	}
+	rotate(0,1,0,rotateStep);
+    }
+
+    function rotateZ()
+    {
+	rotateStep = document.getElementById("rotateStep").value;
+	if(rotateStep=="")
+	{
+	  return;
+	}
+	rotate(0,0,1,rotateStep);
+    }
+
+    function shift(x, y, z)
+    {
+	xoffset = xoffset+parseFloat(x);
+	yoffset = yoffset+parseFloat(y);
+	zoffset = zoffset+parseFloat(z);
+	mat4.identity(mvMatrix);
+	mat4.translate(mvMatrix, [xoffset, yoffset, zoffset]);
+	mat4.multiply(mvMatrix, rotationMatrix);
+	drawScene();
+    }
+    
+    function shiftX()
+    {
+	shiftStep = document.getElementById("shiftStep").value;
+	if(shiftStep=="")
+	{
+	  return;
+	}
+	shift(shiftStep,0,0);
+    }
+
+    function shiftY()
+    {
+	shiftStep = document.getElementById("shiftStep").value;
+	if(shiftStep=="")
+	{
+	  return;
+	}
+	shift(0,shiftStep,0);
+    }
+
+    function shiftZ()
+    {
+	shiftStep = document.getElementById("shiftStep").value;
+	if(shiftStep=="")
+	{
+	  return;
+	}
+	shift(0,0,shiftStep);
+    }
+    
+//     function changePointSize()
+//     {
+// 	pointSize = $("#pointSize").slider("value");
+// 	document.getElementById("taPointSize").innerHTML = pointSize;
+// 	drawScene();
+//     }
+
+    function handleScroll(event)
+    {
+	var delta = 0;
+ 
+	if (!event) event = window.event;
+    
+	// normalize the delta
+	if (event.wheelDelta) {
+    
+	    // IE and Opera
+	    delta = event.wheelDelta / 60;
+    
+	} else if (event.detail) {
+    
+	    // W3C
+	    delta = -event.detail / 3;
+	}
+    
+	shift(0,0,delta);
+    }
+
+    var currentlyPressedKeys = {};
+
+    function handleKeyDown(event) {
+        currentlyPressedKeys[event.keyCode] = true;
+	if(event.keyCode==107) // PLUS key
+	{
+	    pointSize+=1;
+	    if(pointSize>maxPointSize)
+	    {
+		pointSize = maxPointSize;
+	    }
+	    else
+	    {
+		drawScene();
+	    }
+	}
+	else if(event.keyCode==109)
+	{
+	    pointSize-=1;
+	    if(pointSize<minPointSize)
+	    {
+		pointSize = minPointSize;
+	    }
+	    else
+	    {
+		drawScene();
+	    }
+	}
+    }
+
+    function handleKeyUp(event) {
+        currentlyPressedKeys[event.keyCode] = false;
+    }
+
+    function webGLStart() {
+        var canvas = document.getElementById("cloudCanvas");
+// 	$(document).scroll(
+// 	    function() {
+// 		alert("scroll");
+// 	    }
+// 	);
+	
+	canvas.addEventListener('DOMMouseScroll', handleScroll, false); // Firefox
+	document.onmousewheel = handleScroll; // IE/Opera
+// 	pointSize = $("#pointSize").slider("value");
+// 	document.getElementById("taPointSize").innerHTML = pointSize;
+        initGL(canvas);
+        initShaders()
+        initBuffers();
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+        gl.enable(gl.DEPTH_TEST);
+	document.getElementById("buttons").style.visibility = "visible";
+	canvas.onmousedown = handleMouseDown;
+        document.onmouseup = handleMouseUp;
+        document.onmousemove = handleMouseMove;
+	document.onkeydown = handleKeyDown;
+        document.onkeyup = handleKeyUp;
+	initializeScene();
+    }
+/*    
+    $(function() {
+      $( "#pointSize" ).slider(
+	{
+	  range: "min",
+          min: 1,
+	  max: 7,
+	  value: 3,
+	  slide: changePointSize,
+	  change: changePointSize
+	}
+    );
+    });*/
+
+</script>
+
+</head>
+
+<style>
+#pointSize {
+float: left;
+clear: left;
+width: 300px;
+margin: 15px;
+}
+</style>
+
+<body onload="webGLStart();">
+    <canvas id="cloudCanvas" style="border: none;" width="600" height="600"></canvas>
+
+    <br/>
+    
+    <form id="buttons" style="visibility:hidden">
+<!--      <button type="button" onclick="rotateX();">RotateX</button>
+      <button type="button" onclick="rotateY();">RotateY</button>
+      <button type="button" onclick="rotateZ();">RotateZ</button>
+      <button type="button" onclick="shiftX();">ShiftX</button>
+      <button type="button" onclick="shiftY();">ShiftY</button>
+      <button type="button" onclick="shiftZ();">ShiftZ</button>-->
+<!--       <button type="button" onclick="zoom();">Zoom</button><br />  -->
+<!--      Rotation Step: <input type="number" id="rotateStep"></input><br />
+      Shift Step: <input type="number" id="shiftStep"></input><br />-->
+<!--      Info:<div id="info"></div><br />-->
+<!--       Zoom Scale: <input type="number" id="zoom"></input><br /> -->
+<!--       Point Size: <div id="taPointSize"></div> -->
+<!--       <div id="pointSize"></div> -->
+    </form>
+</body>
+
+</html>

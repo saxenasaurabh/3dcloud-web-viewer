@@ -1,0 +1,90 @@
+<html>
+
+<head>
+<title>PCD XYZRGB Cloud Viewer</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<link rel="stylesheet" href="scripts/jquery-ui.css" />
+<link rel="stylesheet" href="scripts/style.css" />
+<script type="text/javascript" src="scripts/jquery.js"></script>
+<script type="text/javascript" src="scripts/jquery-ui.js"></script>
+<script type="text/javascript" src="scripts/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="scripts/webgl-utils.js"></script>
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec4 vColor;
+
+    void main(void) {
+        gl_FragColor = vColor;
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec4 aVertexColor;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+    uniform float uPointSize;
+
+    varying vec4 vColor;
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+	gl_PointSize = uPointSize;
+        vColor = aVertexColor;
+    }
+</script>
+<script type="text/javascript" src="scripts/main.js"></script>
+<script type="text/javascript">
+var fileName = getParam("load");
+// loadURL(fileName);
+</script>
+
+</head>
+
+<body onload="webGLStart();">
+    <div id="topBar">
+      <img src="qmark.png" id="qmark"></img>
+      <form id="uploadForm" action="javascript:loadLocalFile();">
+	<input type="file" id="uploadField" onchange="javascript:$('#uploadFieldValue').val($('#uploadField').val());"></input>
+	<input type="text" id="uploadFieldValue" onclick="javasript:$('#uploadField').click();" readonly></input>
+	<button id="uploadButton">Upload</button>
+      </form>
+      <div id="fileName">
+	<input type="text" id="fileNameTextField"></input>
+	<script type="text/javascript">
+	  document.getElementById("fileNameTextField").value = fileName;
+	</script>
+	<button id="updateURLButton" onclick="javascript:updateURL()">Update URL</button>
+      </div>
+    </div>
+    <div id="help">
+      Mouse Controls:<br/>
+      Click + move  : rotate about x and y axes <br/>
+      Ctrl + Click  : rotate about z axis <br/>
+      Shift + Click : shift in the plane <br/>
+      Scroll        : zoom in/out<br/><br/>
+      Keyboard Controls:<br/>
+      Up/Down       : rotate about x axis<br/>
+      Left/Right    : rotate about y axis<br/>
+      Ctrl + L/R    : rotate about z axis<br/>
+      Ctrl + U/D    : zoom in/out<br/>
+      Shift + UDLR  : shift in the plane<br/>
+      +/-           : inc/dec point size<br/>
+      h/H           : show/hide help menu<br/>
+      Esc           : hide help menu
+    </div>
+    <script type="text/javascript">
+    $("#qmark").click(
+	function() {
+	    $("#help").slideToggle();
+	}
+    );
+    $("#help").hide();
+    document.write("<canvas id=\"cloudCanvas\" style=\"border: none;\" width=\""+window.innerWidth+"\" height=\""+window.innerHeight+"\"></canvas>");
+    </script>
+</body>
+
+</html>

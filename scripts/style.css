@@ -1,0 +1,80 @@
+html {
+  background:black;
+}
+body {
+  background:black;
+  margin:0;
+  padding:0;
+  color:#f4f4f4;
+  overflow:hidden;
+  font-family:Arial;
+  font-size:12px;
+}
+#topBar {
+  height:35px;
+  width:100%;
+  background:#000;
+  opacity:0.8;
+  position:relative;
+  top:0px;
+  padding-top:25px;
+  right:8px;
+}
+#qmark {
+  position:relative; 
+  height:100%;
+  float:right;
+  opacity:0.4;
+/*   left:5px; */
+  top:-15%;
+/*   vertical-align:center; */
+}
+#fileName {
+  position:relative;
+  height:100%;
+  float:left;
+  left:20px;
+  top: 15%;
+  font-size:15px;
+  font-style:italic;
+}
+#fileNameTextField, #uploadFieldValue {
+  position:relative;
+  background:#444;
+  color:white;
+  width:300px;
+  border:0px;
+  font-style:italic;
+  opacity:0.5;
+}
+#uploadField {
+  background:#444;
+  color:white;
+  opacity:0.6;
+  visibility:hidden;
+}
+#uploadFieldValue {
+  
+}
+#uploadForm {
+  position:relative; 
+  height:100%;
+  float:right;
+}
+#updateURLButton, #uploadButton {
+  color:#999;
+  background-color:#111;
+  border: 1px solid #777;
+  font-weight: bold;
+  opacity:0.5;
+}
+#help {
+  background:#111111;
+  opacity:0.4;
+  position:absolute;
+/*  width:250px;
+  height:200px;*/
+  right:30px;
+  top:50px;
+  padding:10px;
+}
